@@ -1,19 +1,44 @@
 import express from "express";
 import cookieParser from "cookie-parser";
-import path from "path";
+import path, { dirname } from "path";
 import cors from "cors";
 import dotenv from "dotenv";
-
-dotenv.config();
+import { createServer } from "http";
+import { fileURLToPath } from "url";
 
 import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
+// import connectDB from "./config/db.js";
 
-const PORT = process.env.PORT || 3000;
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const app = express();
+const server = createServer(app);
+
+// Middlewares
+app.use(cors());
+app.use(express.json());
+app.use(cookieParser());
+
+// Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
+// Serve frontend in production
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(path.join(__dirname, "../frontend/dist")));
+
+  app.get("*", (_, res) => {
+    res.sendFile(path.join(__dirname, "../frontend", "dist", "index.html"));
+  });
+}
+
+const PORT = process.env.PORT || 3000;
+
 server.listen(PORT, () => {
   console.log("Server running on port: " + PORT);
-  connectDB();
+  // connectDB();
 });
