@@ -8,7 +8,7 @@ import { fileURLToPath } from "url";
 
 import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
-// import connectDB from "./config/db.js";
+import connectDB from "./config/db.js";
 
 dotenv.config();
 
@@ -39,6 +39,6 @@ if (process.env.NODE_ENV === "production") {
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
-  console.log("Server running on port: " + PORT);
-  // connectDB();
+  console.log(`Server running on port: ${PORT}`);
+  connectDB();
 });
