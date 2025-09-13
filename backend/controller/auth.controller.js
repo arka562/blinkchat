@@ -3,7 +3,7 @@ import { generateToken } from "../config/utils.js";
 import User from "../models/User.model.js";
 import bcrypt from "bcryptjs";
 import { ENV } from "../config/env.js";
-// import cloudinary from "../lib/cloudinary.js";
+import cloudinary from "../config/cloudinary.js";
 
 export const signup = async (req, res) => {
   const { fullName, email, password } = req.body;
@@ -96,21 +96,38 @@ export const logout = (_, res) => {
 export const updateProfile = async (req, res) => {
   try {
     const { profilePic } = req.body;
-    if (!profilePic) return res.status(400).json({ message: "Profile pic is required" });
+
+    // Validate input
+    if (!profilePic) {
+      return res.status(400).json({ message: "Profile pic is required" });
+    }
+
+    // Validate auth user
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: "Unauthorized: user not found" });
+    }
 
     const userId = req.user._id;
 
-    const uploadResponse = await cloudinary.uploader.upload(profilePic);
+    // Upload to Cloudinary
+    const uploadResponse = await cloudinary.uploader.upload(profilePic, {
+      folder: "blinkchat/profile_pics", // optional: keep uploads organized
+    });
 
+    // Update user profile
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { profilePic: uploadResponse.secure_url },
       { new: true }
-    );
+    ).select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
     res.status(200).json(updatedUser);
   } catch (error) {
-    console.log("Error in update profile:", error);
-    res.status(500).json({ message: "Internal server error" });
+    console.error("❌ Error in update profile:", error.message, error.stack);
+    res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
