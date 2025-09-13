@@ -18,8 +18,14 @@ const __dirname = dirname(__filename);
 const app = express();
 const server = createServer(app);
 
-// Middlewares
-app.use(cors());
+// ✅ Fix: configure CORS
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL || "http://localhost:5173", // frontend URL
+    credentials: true, // allow cookies & auth headers
+  })
+);
+
 app.use(express.json());
 app.use(cookieParser());
 
