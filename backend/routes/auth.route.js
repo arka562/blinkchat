@@ -7,9 +7,6 @@ const router = express.Router();
 
 router.use(arcjetProtection);
 
-router.get("/test",arcjetProtection,(req,res)=>{
-  res.status(200).jsom({message:"bot detected"})
-})
 
 router.post("/signup", signup);
 router.post("/login", login);
