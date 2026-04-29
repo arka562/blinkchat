@@ -1,43 +1,45 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.model.js";
-import { ENV } from "../config/env.js";
+import cookie from "cookie";
 
 export const socketAuthMiddleware = async (socket, next) => {
   try {
-    // extract token from http-only cookies
-    const token = socket.handshake.headers.cookie
-      ?.split("; ")
-      .find((row) => row.startsWith("jwt="))
-      ?.split("=")[1];
+    const cookies = cookie.parse(socket.handshake.headers.cookie || "");
+    const token = cookies.jwt;
 
     if (!token) {
-      console.log("Socket connection rejected: No token provided");
       return next(new Error("Unauthorized - No Token Provided"));
     }
 
-    // verify the token
-    const decoded = jwt.verify(token, ENV.JWT_SECRET);
-    if (!decoded) {
-      console.log("Socket connection rejected: Invalid token");
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch {
       return next(new Error("Unauthorized - Invalid Token"));
     }
 
-    // find the user fromdb
-    const user = await User.findById(decoded.userId).select("-password");
+    const user = await User.findById(decoded.userId)
+      .select("-password")
+      .lean();
+
     if (!user) {
-      console.log("Socket connection rejected: User not found");
       return next(new Error("User not found"));
     }
 
-    // attach user info to socket
-    socket.user = user;
+    socket.user = {
+      _id: user._id,
+      fullName: user.fullName,
+    };
+
     socket.userId = user._id.toString();
 
-    console.log(`Socket authenticated for user: ${user.fullName} (${user._id})`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`Socket authenticated: ${user._id}`);
+    }
 
-    next();
+    return next();
   } catch (error) {
-    console.log("Error in socket authentication:", error.message);
-    next(new Error("Unauthorized - Authentication failed"));
+    console.error("Socket Auth Error:", error.message);
+    return next(new Error("Authentication failed"));
   }
 };

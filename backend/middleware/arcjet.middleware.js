@@ -5,29 +5,45 @@ export const arcjetProtection = async (req, res, next) => {
   try {
     const decision = await aj.protect(req);
 
-    if (decision.isDenied()) {
-      if (decision.reason.isRateLimit()) {
-        return res.status(429).json({ message: "Rate limit exceeded. Please try again later." });
-      } else if (decision.reason.isBot()) {
-        return res.status(403).json({ message: "Bot access denied." });
-      } else {
-        return res.status(403).json({
-          message: "Access denied by security policy.",
-        });
-      }
-    }
+    // Attach decision for later use
+    req.arcjet = decision;
 
-    // check for spoofed bots
-    if (decision.results.some(isSpoofedBot)) {
+    // 🔥 Check spoofed bot first
+    if (decision.results?.some(isSpoofedBot)) {
       return res.status(403).json({
-        error: "Spoofed bot detected",
+        success: false,
         message: "Malicious bot activity detected.",
       });
     }
 
-    next();
+    if (decision.isDenied()) {
+      if (decision.reason?.isRateLimit?.()) {
+        return res.status(429).json({
+          success: false,
+          message: "Rate limit exceeded. Please try again later.",
+        });
+      }
+
+      if (decision.reason?.isBot?.()) {
+        return res.status(403).json({
+          success: false,
+          message: "Bot access denied.",
+        });
+      }
+
+      return res.status(403).json({
+        success: false,
+        message: "Access denied by security policy.",
+      });
+    }
+
+    return next();
   } catch (error) {
-    console.log("Arcjet Protection Error:", error);
-    next();
+    console.error("Arcjet Protection Error:", {
+      message: error.message,
+      stack: error.stack,
+    });
+
+    return next(); // fail-open strategy
   }
 };
