@@ -8,7 +8,8 @@ import {
   UserIcon,
   LoaderIcon,
 } from "lucide-react";
-import { Link } from "react-router";
+import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
 
 function SignUpPage() {
   const [formData, setFormData] = useState({
@@ -16,11 +17,29 @@ function SignUpPage() {
     email: "",
     password: "",
   });
+
   const { signup, isSigningUp } = useAuthStore();
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    signup(formData);
+
+    if (
+      !formData.fullName.trim() ||
+      !formData.email.trim() ||
+      !formData.password.trim()
+    ) {
+      return toast.error("All fields are required");
+    }
+
+    if (formData.password.trim().length < 6) {
+      return toast.error("Password must be at least 6 characters");
+    }
+
+    signup({
+      fullName: formData.fullName.trim(),
+      email: formData.email.trim(),
+      password: formData.password.trim(),
+    });
   };
 
   return (
@@ -28,31 +47,39 @@ function SignUpPage() {
       <div className="relative w-full max-w-6xl md:h-[800px] h-[650px]">
         <BorderAnimatedContainer>
           <div className="w-full flex flex-col md:flex-row">
-            {/* FORM CLOUMN - LEFT SIDE */}
+
+            {/* LEFT - FORM */}
             <div className="md:w-1/2 p-8 flex items-center justify-center md:border-r border-slate-600/30">
               <div className="w-full max-w-md">
-                {/* HEADING TEXT */}
+
                 <div className="text-center mb-8">
                   <MessageCircleIcon className="w-12 h-12 mx-auto text-slate-400 mb-4" />
                   <h2 className="text-2xl font-bold text-slate-200 mb-2">
                     Create Account
                   </h2>
-                  <p className="text-slate-400">Sign up for a new account</p>
+                  <p className="text-slate-400">
+                    Sign up to start chatting
+                  </p>
                 </div>
 
-                {/* FORM */}
                 <form onSubmit={handleSubmit} className="space-y-6">
+
                   {/* FULL NAME */}
                   <div>
                     <label className="auth-input-label">Full Name</label>
                     <div className="relative">
                       <UserIcon className="auth-input-icon" />
-
                       <input
                         type="text"
+                        required
+                        disabled={isSigningUp}
+                        autoComplete="name"
                         value={formData.fullName}
                         onChange={(e) =>
-                          setFormData({ ...formData, fullName: e.target.value })
+                          setFormData({
+                            ...formData,
+                            fullName: e.target.value,
+                          })
                         }
                         className="input"
                         placeholder="John Doe"
@@ -60,17 +87,22 @@ function SignUpPage() {
                     </div>
                   </div>
 
-                  {/* EMAIL INPUT */}
+                  {/* EMAIL */}
                   <div>
                     <label className="auth-input-label">Email</label>
                     <div className="relative">
                       <MailIcon className="auth-input-icon" />
-
                       <input
                         type="email"
+                        required
+                        disabled={isSigningUp}
+                        autoComplete="email"
                         value={formData.email}
                         onChange={(e) =>
-                          setFormData({ ...formData, email: e.target.value })
+                          setFormData({
+                            ...formData,
+                            email: e.target.value,
+                          })
                         }
                         className="input"
                         placeholder="johndoe@gmail.com"
@@ -78,17 +110,22 @@ function SignUpPage() {
                     </div>
                   </div>
 
-                  {/* PASSWORD INPUT */}
+                  {/* PASSWORD */}
                   <div>
                     <label className="auth-input-label">Password</label>
                     <div className="relative">
                       <LockIcon className="auth-input-icon" />
-
                       <input
                         type="password"
+                        required
+                        disabled={isSigningUp}
+                        autoComplete="new-password"
                         value={formData.password}
                         onChange={(e) =>
-                          setFormData({ ...formData, password: e.target.value })
+                          setFormData({
+                            ...formData,
+                            password: e.target.value,
+                          })
                         }
                         className="input"
                         placeholder="Enter your password"
@@ -96,7 +133,7 @@ function SignUpPage() {
                     </div>
                   </div>
 
-                  {/* SUBMIT BUTTON */}
+                  {/* BUTTON */}
                   <button
                     className="auth-btn"
                     type="submit"
@@ -115,15 +152,16 @@ function SignUpPage() {
                     Already have an account? Login
                   </Link>
                 </div>
+
               </div>
             </div>
 
-            {/* FORM ILLUSTRATION - RIGHT SIDE */}
+            {/* RIGHT - ILLUSTRATION */}
             <div className="hidden md:w-1/2 md:flex items-center justify-center p-6 bg-gradient-to-bl from-slate-800/20 to-transparent">
               <div>
                 <img
                   src="/signup.png"
-                  alt="People using mobile devices"
+                  alt="Signup illustration"
                   className="w-full h-auto object-contain"
                 />
                 <div className="mt-6 text-center">
@@ -139,10 +177,12 @@ function SignUpPage() {
                 </div>
               </div>
             </div>
+
           </div>
         </BorderAnimatedContainer>
       </div>
     </div>
   );
 }
+
 export default SignUpPage;

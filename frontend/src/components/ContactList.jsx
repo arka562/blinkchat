@@ -8,9 +8,11 @@ function ContactList() {
     useChatStore();
   const { onlineUsers } = useAuthStore();
 
-  useEffect(() => {
-    getAllContacts();
-  }, [getAllContacts]);
+  const { fetchContacts } = useChatStore();
+
+useEffect(() => {
+  fetchContacts();
+}, [fetchContacts]);
 
   if (isUsersLoading) return <UsersLoadingSkeleton />;
 

@@ -10,7 +10,7 @@ export const socketAuthMiddleware = async (socket, next) => {
     if (!token) {
       return next(new Error("Unauthorized - No Token Provided"));
     }
-
+    console.log("COOKIE HEADER:", socket.handshake.headers.cookie);
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);

@@ -9,9 +9,11 @@ function ChatsList() {
     useChatStore();
   const { onlineUsers } = useAuthStore();
 
-  useEffect(() => {
-    getMyChatPartners();
-  }, [getMyChatPartners]);
+  const { fetchChatPartners } = useChatStore();
+
+useEffect(() => {
+  fetchChatPartners();
+}, [fetchChatPartners]);
 
   if (isUsersLoading) return <UsersLoadingSkeleton />;
   if (chats.length === 0) return <NoChatsFound />;

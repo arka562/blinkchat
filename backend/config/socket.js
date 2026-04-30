@@ -7,41 +7,31 @@ const userSocketMap = {}; // { userId: socketId }
 // 🔌 Initialize Socket.IO with existing HTTP server
 export const initSocket = (server) => {
   io = new Server(server, {
-    cors: {
-      origin: [process.env.CLIENT_URL],
-      credentials: true,
-    },
-  });
+  cors: {
+    origin: process.env.NODE_ENV === "development"
+      ? ["http://localhost:5173", "http://localhost:5174"]
+      : [process.env.CLIENT_URL],
+    credentials: true,
+  },
+});
 
   // 🔐 Apply authentication middleware
   io.use(socketAuthMiddleware);
 
-  io.on("connection", (socket) => {
-    const userId = socket.userId;
+ io.on("connection", (socket) => {
+  const userId = socket.userId;
 
-    if (process.env.NODE_ENV === "development") {
-      console.log("User connected:", socket.user?._id);
-    }
+  userSocketMap[userId] = socket.id;
+  
+  // ✅ Tell everyone someone came online
+  io.emit("getOnlineUsers", Object.keys(userSocketMap));
 
-    // Store user socket
-    userSocketMap[userId] = socket.id;
-
-    // Emit updated online users list
+  socket.on("disconnect", (reason) => {
+    delete userSocketMap[userId];
+    // ✅ Tell everyone someone went offline
     io.emit("getOnlineUsers", Object.keys(userSocketMap));
-
-    // Handle disconnect
-    socket.on("disconnect", () => {
-      if (process.env.NODE_ENV === "development") {
-        console.log("User disconnected:", userId);
-      }
-
-      if (userSocketMap[userId]) {
-        delete userSocketMap[userId];
-      }
-
-      io.emit("getOnlineUsers", Object.keys(userSocketMap));
-    });
   });
+});
 
   return io;
 };
@@ -58,3 +48,4 @@ export const getIO = () => {
   }
   return io;
 };
+

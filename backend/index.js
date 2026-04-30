@@ -11,14 +11,12 @@ import path, { dirname } from "path";
 import cors from "cors";
 import { createServer } from "http";
 import { fileURLToPath } from "url";
-import { initSocket } from "./config/socket.js"; 
+
+import { initSocket } from "./config/socket.js"; // ✅ ONLY this
 import aj from "./config/arcjet.js";
 import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
 import connectDB from "./config/db.js";
-
-// Debug (optional)
-console.log("ENV CHECK:", process.env.MONGO_URI);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,10 +24,16 @@ const __dirname = dirname(__filename);
 const app = express();
 const server = createServer(app);
 
-// ✅ CORS config
+// Debug
+console.log("ENV CHECK:", process.env.MONGO_URI);
+
+// ✅ EXPRESS CORS (VERY IMPORTANT)
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:5174",
+    ],
     credentials: true,
   })
 );
@@ -66,7 +70,7 @@ app.use(async (req, res, next) => {
     next();
   } catch (error) {
     console.error("Arcjet error:", error);
-    next(); // don't block app if Arcjet fails
+    next();
   }
 });
 
@@ -92,7 +96,7 @@ const startServer = async () => {
   try {
     await connectDB();
 
-    // 🔥 THIS IS THE MISSING LINE
+    // 🔥 SINGLE socket initialization (ONLY THIS)
     initSocket(server);
 
     server.listen(PORT, () => {
