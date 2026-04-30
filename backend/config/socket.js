@@ -1,45 +1,60 @@
 import { Server } from "socket.io";
-import http from "http";
-import express from "express";
-import { ENV } from "./env.js";
 import { socketAuthMiddleware } from "../middleware/socket.auth.middleware.js";
 
-const app = express();
-const server = http.createServer(app);
+let io;
+const userSocketMap = {}; // { userId: socketId }
 
-const io = new Server(server, {
-  cors: {
-    origin: [ENV.CLIENT_URL],
-    credentials: true,
-  },
-});
-
-// apply authentication middleware to all socket connections
-io.use(socketAuthMiddleware);
-
-// we will use this function to check if the user is online or not
-export function getReceiverSocketId(userId) {
-  return userSocketMap[userId];
-}
-
-// this is for storig online users
-const userSocketMap = {}; // {userId:socketId}
-
-io.on("connection", (socket) => {
-  console.log("A user connected", socket.user.fullName);
-
-  const userId = socket.userId;
-  userSocketMap[userId] = socket.id;
-
-  // io.emit() is used to send events to all connected clients
-  io.emit("getOnlineUsers", Object.keys(userSocketMap));
-
-  // with socket.on we listen for events from clients
-  socket.on("disconnect", () => {
-    console.log("A user disconnected", socket.user.fullName);
-    delete userSocketMap[userId];
-    io.emit("getOnlineUsers", Object.keys(userSocketMap));
+// 🔌 Initialize Socket.IO with existing HTTP server
+export const initSocket = (server) => {
+  io = new Server(server, {
+    cors: {
+      origin: [process.env.CLIENT_URL],
+      credentials: true,
+    },
   });
-});
 
-export { io, app, server };
+  // 🔐 Apply authentication middleware
+  io.use(socketAuthMiddleware);
+
+  io.on("connection", (socket) => {
+    const userId = socket.userId;
+
+    if (process.env.NODE_ENV === "development") {
+      console.log("User connected:", socket.user?._id);
+    }
+
+    // Store user socket
+    userSocketMap[userId] = socket.id;
+
+    // Emit updated online users list
+    io.emit("getOnlineUsers", Object.keys(userSocketMap));
+
+    // Handle disconnect
+    socket.on("disconnect", () => {
+      if (process.env.NODE_ENV === "development") {
+        console.log("User disconnected:", userId);
+      }
+
+      if (userSocketMap[userId]) {
+        delete userSocketMap[userId];
+      }
+
+      io.emit("getOnlineUsers", Object.keys(userSocketMap));
+    });
+  });
+
+  return io;
+};
+
+// 📡 Get receiver socket ID
+export const getReceiverSocketId = (userId) => {
+  return userSocketMap[userId];
+};
+
+// 📤 Export io instance getter (safe access)
+export const getIO = () => {
+  if (!io) {
+    throw new Error("Socket.io not initialized!");
+  }
+  return io;
+};

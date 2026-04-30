@@ -1,133 +1,175 @@
-// import { sendWelcomeEmail } from "../emails/emailHandler.js";
 import { generateToken } from "../config/utils.js";
 import User from "../models/User.model.js";
 import bcrypt from "bcryptjs";
-import { ENV } from "../config/env.js";
 import cloudinary from "../config/cloudinary.js";
 
+// ================= SIGNUP =================
 export const signup = async (req, res) => {
-  const { fullName, email, password } = req.body;
-
   try {
-    if (!fullName || !email || !password) {
-      return res.status(400).json({ message: "All fields are required" });
+    const { fullName, email, password } = req.body;
+
+    if (!fullName?.trim() || !email?.trim() || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    if (password.length < 6) {  // ❌ removed .trim()
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters",
+      });
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: "Invalid email format" });
+    const normalizedEmail = email.toLowerCase().trim();
+    // ❌ removed: const cleanPassword = password.trim();
+
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "Email already exists",
+      });
     }
-
-    const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ message: "Email already exists" });
-
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
 
     const newUser = new User({
-      fullName,
-      email,
-      password: hashedPassword,
+      fullName: fullName.trim(),
+      email: normalizedEmail,
+      password: password,  // ✅ raw password, schema pre-save hook hashes it
     });
+
+    // ❌ removed: manual bcrypt.hash — the pre-save hook handles this
+    // ❌ removed: hashedPassword variable entirely
 
     const savedUser = await newUser.save();
 
-    // Generate auth token
-    const token=generateToken(savedUser._id, res);
+    generateToken(savedUser._id, res);
 
-    // Send welcome email
-    // await sendWelcomeEmail(email, fullName);
-
-    // Send response only once
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      message: "User created",
-      _id: savedUser._id,
-      fullName: savedUser.fullName,
-      email: savedUser.email,
-      profilePic: savedUser.profilePic,
-      token
+      message: "User created successfully",
+      user: {
+        _id: savedUser._id,
+        fullName: savedUser.fullName,
+        email: savedUser.email,
+        profilePic: savedUser.profilePic,
+      },
     });
   } catch (error) {
-    console.log("Error in signup controller:", error);
-    res.status(500).json({ message: "Internal server error" });
+    console.error("Signup Error:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
 
+// ================= LOGIN =================
 export const login = async (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email and password are required" });
-  }
-
   try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: "Invalid credentials" });
-    // never tell the client which one is incorrect: password or email
+    const { email, password } = req.body;
 
-    const isPasswordCorrect = await bcrypt.compare(password, user.password);
-    if (!isPasswordCorrect) return res.status(400).json({ message: "Invalid credentials" });
+    if (!email?.trim() || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
 
-    const token=generateToken(user._id, res);
+    const normalizedEmail = email.toLowerCase().trim();
+    // ❌ removed: password.trim()
 
-    res.status(200).json({
-      _id: user._id,
-      fullName: user.fullName,
-      email: user.email,
-      profilePic: user.profilePic,
-      token
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
+
+    const isPasswordCorrect = await bcrypt.compare(
+      password,  // ✅ raw password
+      user.password
+    );
+
+    if (!isPasswordCorrect) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
+
+    generateToken(user._id, res);
+
+    return res.status(200).json({
+      success: true,
+        message: "Login successful",
+      user: {
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        profilePic: user.profilePic,
+      },
     });
   } catch (error) {
-    console.error("Error in login controller:", error);
-    res.status(500).json({ message: "Internal server error" });
+    console.error("Login Error:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
 
+// ================= LOGOUT =================
 export const logout = (_, res) => {
   res.cookie("jwt", "", { maxAge: 0 });
-  res.status(200).json({ message: "Logged out successfully" });
+
+  return res.status(200).json({
+    success: true,
+    message: "Logged out successfully",
+  });
 };
 
+// ================= UPDATE PROFILE =================
 export const updateProfile = async (req, res) => {
   try {
     const { profilePic } = req.body;
 
-    // Validate input
     if (!profilePic) {
-      return res.status(400).json({ message: "Profile pic is required" });
+      return res.status(400).json({
+        success: false,
+        message: "Profile picture is required",
+      });
     }
 
-    // Validate auth user
-    if (!req.user || !req.user._id) {
-      return res.status(401).json({ message: "Unauthorized: user not found" });
+    if (!req.user?._id) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
     }
 
-    const userId = req.user._id;
-
-    // Upload to Cloudinary
     const uploadResponse = await cloudinary.uploader.upload(profilePic, {
-      folder: "blinkchat/profile_pics", // optional: keep uploads organized
+      folder: "blinkchat/profile_pics",
     });
 
-    // Update user profile
     const updatedUser = await User.findByIdAndUpdate(
-      userId,
+      req.user._id,
       { profilePic: uploadResponse.secure_url },
       { new: true }
     ).select("-password");
 
-    if (!updatedUser) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    res.status(200).json(updatedUser);
+    return res.status(200).json({
+      success: true,
+      user: updatedUser,
+    });
   } catch (error) {
-    console.error("❌ Error in update profile:", error.message, error.stack);
-    res.status(500).json({ message: "Internal server error", error: error.message });
+    console.error("Update Profile Error:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
