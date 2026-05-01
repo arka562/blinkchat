@@ -2,6 +2,7 @@ import cloudinary from "../config/cloudinary.js";
 import { getReceiverSocketId, getIO } from "../config/socket.js";
 import Message from "../models/message.model.js";
 import User from "../models/User.model.js";
+import Conversation from "../models/Conversation.model.js";
 import mongoose from "mongoose";
 // ================= GET ALL CONTACTS =================
 export const getAllContacts = async (req, res) => {
@@ -101,7 +102,6 @@ export const sendMessage = async (req, res) => {
     }
 
     let imageUrl;
-
     if (image) {
       if (!image.startsWith("data:image")) {
         return res.status(400).json({
@@ -124,12 +124,28 @@ export const sendMessage = async (req, res) => {
       }
     }
 
+    // ================= FIND OR CREATE CONVERSATION =================
+let conversation = await Conversation.findOne({
+  participants: { $all: [senderId, receiverId] },
+});
+
+if (!conversation) {
+  conversation = await Conversation.create({
+    participants: [senderId, receiverId],
+  });
+}
+
     const newMessage = await Message.create({
       senderId,
       receiverId,
       text: cleanText,
       image: imageUrl,
     });
+
+    // ================= UPDATE CONVERSATION =================
+conversation.lastMessage = cleanText || "📷 Image";
+conversation.lastMessageAt = new Date();
+await conversation.save();
 
     // 🔥 Real-time emit
     const io = getIO();
@@ -196,6 +212,47 @@ export const getChatPartners = async (req, res) => {
     });
   } catch (error) {
     console.error("getChatPartners Error:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+export const markMessagesAsSeen = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { id: senderId } = req.params;
+
+    await Message.updateMany(
+      {
+        senderId,
+        receiverId: userId,
+        seen: false,
+      },
+      {
+        $set: {
+          seen: true,
+          seenAt: new Date(),
+        },
+      }
+    );
+
+    // 🔥 Emit real-time update
+    const io = getIO();
+    const senderSocketId = getReceiverSocketId(senderId);
+
+   if (senderSocketId) {
+  io.to(senderSocketId).emit("messagesSeen", {
+    seenBy: userId.toString(), // ✅ force string
+  });
+}
+
+    return res.status(200).json({
+      success: true,
+    });
+  } catch (error) {
+    console.error("markMessagesAsSeen Error:", error.message);
     return res.status(500).json({
       success: false,
       message: "Internal server error",

@@ -14,20 +14,29 @@ function ChatContainer() {
     isMessagesLoading,
     subscribeToMessages,
     unsubscribeFromMessages,
+    markMessagesAsSeen,
+    isTyping,
   } = useChatStore();
 
-  const { authUser } = useAuthStore();
+  const { authUser, socket } = useAuthStore(); // ✅ include socket
   const messageEndRef = useRef(null);
 
+  // ================= MAIN EFFECT =================
   useEffect(() => {
-    if (!selectedUser?._id) return;
+    if (!selectedUser?._id || !socket) return;
+
+    console.log("🔥 SUBSCRIBING TO SOCKET EVENTS");
 
     getMessagesByUserId(selectedUser._id);
     subscribeToMessages();
+    markMessagesAsSeen(selectedUser._id);
 
-    return () => unsubscribeFromMessages();
-  }, [selectedUser?._id]);
+    return () => {
+      unsubscribeFromMessages();
+    };
+  }, [selectedUser?._id, socket]); // ✅ CRITICAL FIX
 
+  // ================= AUTO SCROLL =================
   useEffect(() => {
     if (messageEndRef.current) {
       messageEndRef.current.scrollIntoView({
@@ -41,6 +50,7 @@ function ChatContainer() {
       <ChatHeader />
 
       <div className="flex-1 px-6 overflow-y-auto py-8">
+        {/* ================= MESSAGES ================= */}
         {messages.length > 0 && !isMessagesLoading ? (
           <div className="max-w-3xl mx-auto space-y-6">
             {messages.map((msg) => {
@@ -59,6 +69,7 @@ function ChatContainer() {
                         : "bg-slate-800 text-slate-200"
                     }`}
                   >
+                    {/* IMAGE */}
                     {msg.image && (
                       <img
                         src={msg.image}
@@ -68,14 +79,24 @@ function ChatContainer() {
                       />
                     )}
 
+                    {/* TEXT */}
                     {msg.text && <p className="mt-2">{msg.text}</p>}
 
-                    <p className="text-xs mt-1 opacity-75">
-                      {new Date(msg.createdAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
+                    {/* TIME + STATUS */}
+                    <div className="flex items-center gap-1 mt-1 text-xs opacity-75">
+                      <span>
+                        {new Date(msg.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+
+                      {isOwn && (
+                        <span>
+                          {msg.seen ? "✔✔" : "✔"}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -89,6 +110,13 @@ function ChatContainer() {
           <NoChatHistoryPlaceholder name={selectedUser?.fullName} />
         )}
       </div>
+
+      {/* 🔥 TYPING INDICATOR (FINAL POSITION) */}
+      {isTyping && (
+        <p className="text-sm text-slate-400 px-6 pb-1 animate-pulse">
+          {selectedUser?.fullName} is typing...
+        </p>
+      )}
 
       <MessageInput />
     </>

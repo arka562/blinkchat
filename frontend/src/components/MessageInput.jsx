@@ -1,34 +1,52 @@
 import { useRef, useState } from "react";
 import useKeyboardSound from "../hooks/useKeyboardSound";
 import { useChatStore } from "../store/useChatStore";
+import { useAuthStore } from "../store/useAuthStore";
 import toast from "react-hot-toast";
 import { ImageIcon, SendIcon, XIcon } from "lucide-react";
 
 function MessageInput() {
   const { playRandomKeyStrokeSound } = useKeyboardSound();
+
   const [text, setText] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
 
   const fileInputRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
-  const { sendMessage, isSoundEnabled } = useChatStore();
+  const { sendMessage, isSoundEnabled, selectedUser } = useChatStore();
+  const { socket } = useAuthStore();
 
+  // ================= SEND MESSAGE =================
   const handleSendMessage = (e) => {
     e.preventDefault();
+
     if (!text.trim() && !imagePreview) return;
+
     if (isSoundEnabled) playRandomKeyStrokeSound();
 
     sendMessage({
       text: text.trim(),
       image: imagePreview,
     });
+
     setText("");
-    setImagePreview("");
+    setImagePreview(null);
+
     if (fileInputRef.current) fileInputRef.current.value = "";
+
+    // 🔥 stop typing when message sent
+    if (socket && selectedUser) {
+      socket.emit("stopTyping", { to: selectedUser._id });
+    }
   };
 
+  // ================= IMAGE HANDLING =================
   const handleImageChange = (e) => {
     const file = e.target.files[0];
+
+    if (!file) return;
+
     if (!file.type.startsWith("image/")) {
       toast.error("Please select an image file");
       return;
@@ -44,8 +62,31 @@ function MessageInput() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  // ================= TYPING LOGIC =================
+  const handleTyping = (e) => {
+    setText(e.target.value);
+
+    if (!socket || !selectedUser) return;
+
+    // 🔥 emit typing
+    socket.emit("typing", { to: selectedUser._id });
+
+    // clear previous timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // debounce stopTyping
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit("stopTyping", { to: selectedUser._id });
+    }, 1000);
+    console.log("🔥 EMITTING TYPING", selectedUser._id);
+  };
+
   return (
     <div className="p-4 border-t border-slate-700/50">
+      
+      {/* IMAGE PREVIEW */}
       {imagePreview && (
         <div className="max-w-3xl mx-auto mb-3 flex items-center">
           <div className="relative">
@@ -65,6 +106,7 @@ function MessageInput() {
         </div>
       )}
 
+      {/* FORM */}
       <form
         onSubmit={handleSendMessage}
         className="max-w-3xl mx-auto flex space-x-4"
@@ -72,14 +114,12 @@ function MessageInput() {
         <input
           type="text"
           value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            isSoundEnabled && playRandomKeyStrokeSound();
-          }}
+          onChange={handleTyping}
           className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-lg py-2 px-4"
           placeholder="Type your message..."
         />
 
+        {/* FILE INPUT */}
         <input
           type="file"
           accept="image/*"
@@ -88,6 +128,7 @@ function MessageInput() {
           className="hidden"
         />
 
+        {/* IMAGE BUTTON */}
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
@@ -97,6 +138,8 @@ function MessageInput() {
         >
           <ImageIcon className="w-5 h-5" />
         </button>
+
+        {/* SEND BUTTON */}
         <button
           type="submit"
           disabled={!text.trim() && !imagePreview}
@@ -108,4 +151,5 @@ function MessageInput() {
     </div>
   );
 }
+
 export default MessageInput;

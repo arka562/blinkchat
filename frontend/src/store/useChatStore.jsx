@@ -12,6 +12,7 @@ export const useChatStore = create((set, get) => ({
   isUsersLoading: false,
   isMessagesLoading: false,
   isSoundEnabled: JSON.parse(localStorage.getItem("isSoundEnabled") || "true"),
+  isTyping: false,
 
   toggleSound: () => {
     const newValue = !get().isSoundEnabled;
@@ -20,32 +21,35 @@ export const useChatStore = create((set, get) => ({
   },
 
   setActiveTab: (tab) => set({ activeTab: tab }),
-  setSelectedUser: (selectedUser) => set({ selectedUser }),
+
+  setSelectedUser: (selectedUser) =>
+    set({ selectedUser, isTyping: false }),
 
   // ================= CONTACTS =================
- fetchContacts: async () => {
-  set({ isUsersLoading: true });
-  try {
-    const res = await axiosInstance.get("/messages/contacts");
-    set({ allContacts: res.data.users });
-  } catch (error) {
-    toast.error(error.response?.data?.message || "Failed to fetch contacts");
-  } finally {
-    set({ isUsersLoading: false });
-  }
-},
+  fetchContacts: async () => {
+    set({ isUsersLoading: true });
+    try {
+      const res = await axiosInstance.get("/messages/contacts");
+      set({ allContacts: res.data.users });
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to fetch contacts");
+    } finally {
+      set({ isUsersLoading: false });
+    }
+  },
 
-fetchChatPartners: async () => {
-  set({ isUsersLoading: true });
-  try {
-    const res = await axiosInstance.get("/messages/chats");
-    set({ chats: res.data.users });
-  } catch (error) {
-    toast.error(error.response?.data?.message || "Failed to fetch chats");
-  } finally {
-    set({ isUsersLoading: false });
-  }
-},
+  fetchChatPartners: async () => {
+    set({ isUsersLoading: true });
+    try {
+      const res = await axiosInstance.get("/messages/chats");
+      set({ chats: res.data.users });
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to fetch chats");
+    } finally {
+      set({ isUsersLoading: false });
+    }
+  },
+
   // ================= MESSAGES =================
   getMessagesByUserId: async (userId) => {
     set({ isMessagesLoading: true });
@@ -63,6 +67,8 @@ fetchChatPartners: async () => {
   sendMessage: async (messageData) => {
     const { selectedUser } = get();
     const { authUser } = useAuthStore.getState();
+
+    if (!selectedUser) return;
 
     const tempId = `temp-${Date.now()}`;
 
@@ -94,32 +100,45 @@ fetchChatPartners: async () => {
       set({
         messages: get().messages.filter((m) => m._id !== tempId),
       });
-
       toast.error(error.response?.data?.message || "Failed to send message");
     }
   },
 
+  // ================= SEEN =================
+  markMessagesAsSeen: async (userId) => {
+    try {
+      await axiosInstance.put(`/messages/seen/${userId}`);
+    } catch (error) {
+      console.log("Seen update failed:", error);
+    }
+  },
+
   // ================= SOCKET =================
+  // ✅ Only handles newMessage now
+  // typing, stopTyping, messagesSeen are registered once at connect time in useAuthStore
   subscribeToMessages: () => {
-    const { selectedUser, isSoundEnabled } = get();
     const socket = useAuthStore.getState().socket;
 
-    if (!socket || !selectedUser) return;
+    if (!socket) return;
 
     socket.off("newMessage");
 
     socket.on("newMessage", (newMessage) => {
-      const isFromSelectedUser =
-        newMessage.senderId.toString() === selectedUser._id.toString();
+      const currentSelected = get().selectedUser;
 
-      if (!isFromSelectedUser) return;
+      if (!currentSelected) return;
 
-      set({ messages: [...get().messages, newMessage] });
+      if (
+        newMessage.senderId?.toString() ===
+        currentSelected._id?.toString()
+      ) {
+        set({ messages: [...get().messages, newMessage] });
 
-      if (isSoundEnabled) {
-        const sound = new Audio("/sounds/notification.mp3");
-        sound.currentTime = 0;
-        sound.play().catch(() => {});
+        if (get().isSoundEnabled) {
+          const sound = new Audio("/sounds/notification.mp3");
+          sound.currentTime = 0;
+          sound.play().catch(() => {});
+        }
       }
     });
   },
@@ -127,6 +146,9 @@ fetchChatPartners: async () => {
   unsubscribeFromMessages: () => {
     const socket = useAuthStore.getState().socket;
     if (!socket) return;
+
+    // ✅ Only remove newMessage here
+    // typing, stopTyping, messagesSeen persist for socket lifetime
     socket.off("newMessage");
   },
 }));
