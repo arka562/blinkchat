@@ -4,6 +4,7 @@ import Message from "../models/message.model.js";
 import User from "../models/User.model.js";
 import Conversation from "../models/Conversation.model.js";
 import mongoose from "mongoose";
+
 // ================= GET ALL CONTACTS =================
 export const getAllContacts = async (req, res) => {
   try {
@@ -50,7 +51,7 @@ export const getMessagesByUserId = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      messages: messages.reverse(), // chronological order
+      messages: messages.reverse(),
     });
   } catch (error) {
     console.error("getMessages Error:", error.message);
@@ -77,7 +78,6 @@ export const sendMessage = async (req, res) => {
       });
     }
 
-    // ✅ FIXED comparison
     if (senderId.toString() === receiverId) {
       return res.status(400).json({
         success: false,
@@ -85,7 +85,6 @@ export const sendMessage = async (req, res) => {
       });
     }
 
-    // ✅ Validate ID
     if (!mongoose.Types.ObjectId.isValid(receiverId)) {
       return res.status(400).json({
         success: false,
@@ -125,27 +124,28 @@ export const sendMessage = async (req, res) => {
     }
 
     // ================= FIND OR CREATE CONVERSATION =================
-let conversation = await Conversation.findOne({
-  participants: { $all: [senderId, receiverId] },
-});
+    let conversation = await Conversation.findOne({
+      participants: { $all: [senderId, receiverId] },
+    });
 
-if (!conversation) {
-  conversation = await Conversation.create({
-    participants: [senderId, receiverId],
-  });
-}
+    if (!conversation) {
+      conversation = await Conversation.create({
+        participants: [senderId, receiverId],
+      });
+    }
 
     const newMessage = await Message.create({
       senderId,
       receiverId,
       text: cleanText,
       image: imageUrl,
+      isSeen: false,
     });
 
     // ================= UPDATE CONVERSATION =================
-conversation.lastMessage = cleanText || "📷 Image";
-conversation.lastMessageAt = new Date();
-await conversation.save();
+    conversation.lastMessage = cleanText || "📷 Image";
+    conversation.lastMessageAt = new Date();
+    await conversation.save();
 
     // 🔥 Real-time emit
     const io = getIO();
@@ -219,6 +219,7 @@ export const getChatPartners = async (req, res) => {
   }
 };
 
+// ================= MARK MESSAGES AS SEEN =================
 export const markMessagesAsSeen = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -228,11 +229,11 @@ export const markMessagesAsSeen = async (req, res) => {
       {
         senderId,
         receiverId: userId,
-        seen: false,
+        isSeen: false,
       },
       {
         $set: {
-          seen: true,
+          isSeen: true,
           seenAt: new Date(),
         },
       }
@@ -242,11 +243,11 @@ export const markMessagesAsSeen = async (req, res) => {
     const io = getIO();
     const senderSocketId = getReceiverSocketId(senderId);
 
-   if (senderSocketId) {
-  io.to(senderSocketId).emit("messagesSeen", {
-    seenBy: userId.toString(), // ✅ force string
-  });
-}
+    if (senderSocketId) {
+      io.to(senderSocketId).emit("messagesSeen", {
+        seenBy: userId.toString(),
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -256,6 +257,57 @@ export const markMessagesAsSeen = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
+    });
+  }
+};
+
+export const getUnreadCounts = async (req, res) => {
+  try {
+    console.log("USER:", req.user);
+
+    if (!req.user?._id) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized - user missing",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(req.user._id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID",
+      });
+    }
+
+    const userId = new mongoose.Types.ObjectId(req.user._id);
+
+    const unread = await Message.aggregate([
+      {
+        $match: {
+          receiverId: userId,
+          isSeen: false,
+        },
+      },
+      {
+        $group: {
+          _id: "$senderId",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    console.log("UNREAD RESULT:", unread);
+
+    return res.status(200).json({
+      success: true,
+      unread,
+    });
+  } catch (error) {
+    console.error("❌ FULL ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };

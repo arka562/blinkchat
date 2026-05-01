@@ -18,7 +18,7 @@ function ChatContainer() {
     isTyping,
   } = useChatStore();
 
-  const { authUser, socket } = useAuthStore(); // ✅ include socket
+  const { authUser, socket } = useAuthStore();
   const messageEndRef = useRef(null);
 
   // ================= MAIN EFFECT =================
@@ -34,7 +34,7 @@ function ChatContainer() {
     return () => {
       unsubscribeFromMessages();
     };
-  }, [selectedUser?._id, socket]); // ✅ CRITICAL FIX
+  }, [selectedUser?._id, socket]);
 
   // ================= AUTO SCROLL =================
   useEffect(() => {
@@ -91,9 +91,10 @@ function ChatContainer() {
                         })}
                       </span>
 
+                      {/* ✅ FIXED: was msg.seen, schema field is isSeen */}
                       {isOwn && (
                         <span>
-                          {msg.seen ? "✔✔" : "✔"}
+                          {msg.isSeen ? "✔✔" : "✔"}
                         </span>
                       )}
                     </div>
@@ -111,7 +112,7 @@ function ChatContainer() {
         )}
       </div>
 
-      {/* 🔥 TYPING INDICATOR (FINAL POSITION) */}
+      {/* 🔥 TYPING INDICATOR */}
       {isTyping && (
         <p className="text-sm text-slate-400 px-6 pb-1 animate-pulse">
           {selectedUser?.fullName} is typing...
