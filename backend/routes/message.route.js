@@ -18,11 +18,12 @@ router.use(arcjetProtection, protectRoute);
 
 router.get("/contacts", getAllContacts);
 router.get("/chats", getChatPartners);
-
-router.post("/send/:id", sendMessage);
-router.put("/seen/:id",  markMessagesAsSeen);
-router.get("/unread", protectRoute, getUnreadCounts);
-
 router.get("/:id", getMessagesByUserId);
+router.post("/send/:id", sendMessage);
+
+// ✅ FIXED
+router.put("/seen/:id", markMessagesAsSeen);
+
+router.get("/unread", getUnreadCounts);
 
 export default router;

@@ -14,6 +14,12 @@ function App() {
     checkAuth();
   }, []);
 
+  useEffect(() => {
+  if (Notification.permission !== "granted") {
+    Notification.requestPermission();
+  }
+}, []);
+
   if (isCheckingAuth) return <PageLoader />;
 
   return (

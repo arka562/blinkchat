@@ -16,10 +16,12 @@ export const useAuthStore = create((set, get) => ({
   socket: null,
   onlineUsers: [],
 
+  // ================= AUTH CHECK =================
   checkAuth: async () => {
     try {
       const res = await axiosInstance.get("/auth/check");
       set({ authUser: res.data.user });
+
       get().connectSocket();
     } catch (error) {
       console.log("Error in authCheck:", error);
@@ -29,11 +31,13 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
+  // ================= SIGNUP =================
   signup: async (data) => {
     set({ isSigningUp: true });
     try {
       const res = await axiosInstance.post("/auth/signup", data);
       set({ authUser: res.data.user });
+
       toast.success("Account created successfully!");
       get().connectSocket();
     } catch (error) {
@@ -43,11 +47,13 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
+  // ================= LOGIN =================
   login: async (data) => {
     set({ isLoggingIn: true });
     try {
       const res = await axiosInstance.post("/auth/login", data);
       set({ authUser: res.data.user });
+
       toast.success("Logged in successfully");
       get().connectSocket();
     } catch (error) {
@@ -57,35 +63,51 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
+  // ================= LOGOUT =================
   logout: async () => {
     try {
       await axiosInstance.post("/auth/logout");
-      set({ authUser: null });
+
+      const socket = get().socket;
+      if (socket) {
+        socket.disconnect();
+      }
+
+      set({ authUser: null, socket: null, onlineUsers: [] });
+
       toast.success("Logged out successfully");
-      get().disconnectSocket();
     } catch (error) {
       toast.error("Error logging out");
+      console.log("Logout error:", error);
     }
   },
 
+  // ================= UPDATE PROFILE =================
   updateProfile: async (data) => {
     try {
       const res = await axiosInstance.put("/auth/update-profile", data);
       set({ authUser: res.data.user });
+
       toast.success("Profile updated successfully");
     } catch (error) {
+      console.log("Error in update profile:", error);
       toast.error(error.response?.data?.message || "Update failed");
     }
   },
 
-  // ================= SOCKET =================
+  // ================= SOCKET CONNECT =================
   connectSocket: () => {
     const { authUser, socket } = get();
+
     if (!authUser) return;
 
+    // ❌ prevent duplicate connections
     if (socket?.connected) return;
 
-    if (socket) socket.disconnect();
+    // cleanup old socket
+    if (socket) {
+      socket.disconnect();
+    }
 
     const newSocket = io(BASE_URL, {
       withCredentials: true,
@@ -94,68 +116,46 @@ export const useAuthStore = create((set, get) => ({
       reconnectionAttempts: 5,
     });
 
+    // ✅ set immediately
     set({ socket: newSocket });
 
+    // ================= CONNECT =================
     newSocket.on("connect", () => {
       console.log("✅ Socket connected:", newSocket.id);
-      console.log("CONNECTED USER:", authUser._id);
 
-      // ✅ Register typing + seen listeners ONCE at connect time
-      // These must NOT be in subscribeToMessages — they need to be
-      // active before any useEffect runs, to avoid the race condition
-      import("./useChatStore").then(({ useChatStore }) => {
-        const chatStore = useChatStore.getState;
+      // 🔥 IMPORTANT: subscribe globally
+      import("../store/useChatStore").then((module) => {
+        const chatStore = module.useChatStore.getState();
 
-        // ================= TYPING =================
-        newSocket.off("typing");
-        newSocket.on("typing", ({ from }) => {
-          const { selectedUser } = useChatStore.getState();
-          if (selectedUser?._id.toString() === from.toString()) {
-            useChatStore.setState({ isTyping: true });
-          }
-        });
-
-        newSocket.off("stopTyping");
-        newSocket.on("stopTyping", ({ from }) => {
-          const { selectedUser } = useChatStore.getState();
-          if (selectedUser?._id.toString() === from.toString()) {
-            useChatStore.setState({ isTyping: false });
-          }
-        });
-
-        // ================= SEEN =================
-        newSocket.off("messagesSeen");
-        newSocket.on("messagesSeen", ({ seenBy }) => {
-          const { messages } = useChatStore.getState();
-          const updated = messages.map((msg) => {
-            if (msg.receiverId?.toString() === seenBy?.toString()) {
-              return { ...msg, seen: true };
-            }
-            return msg;
-          });
-          useChatStore.setState({ messages: updated });
-        });
-
-        // re-subscribe newMessage if chat is already open
-        if (useChatStore.getState().selectedUser) {
-          useChatStore.getState().subscribeToMessages();
-        }
+        chatStore.subscribeToMessages();
       });
     });
 
+    // ================= ONLINE USERS =================
     newSocket.on("getOnlineUsers", (userIds) => {
       console.log("🟢 Online users:", userIds);
       set({ onlineUsers: userIds });
     });
 
+    // ================= ERROR =================
     newSocket.on("connect_error", (err) => {
       console.log("❌ Socket error:", err.message);
     });
+
+    // ================= DISCONNECT =================
+    newSocket.on("disconnect", () => {
+      console.log("🔴 Socket disconnected");
+    });
   },
 
+  // ================= DISCONNECT =================
   disconnectSocket: () => {
     const socket = get().socket;
-    if (socket?.connected) socket.disconnect();
-    set({ socket: null });
+
+    if (socket) {
+      socket.disconnect();
+    }
+
+    set({ socket: null, onlineUsers: [] });
   },
 }));

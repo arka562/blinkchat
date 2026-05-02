@@ -16,10 +16,14 @@ function ChatContainer() {
     unsubscribeFromMessages,
     markMessagesAsSeen,
     isTyping,
+    loadMoreMessages,
+    hasMore
   } = useChatStore();
 
   const { authUser, socket } = useAuthStore();
+
   const messageEndRef = useRef(null);
+  const containerRef = useRef(null);
 
   // ================= MAIN EFFECT =================
   useEffect(() => {
@@ -27,29 +31,72 @@ function ChatContainer() {
 
     console.log("🔥 SUBSCRIBING TO SOCKET EVENTS");
 
-    getMessagesByUserId(selectedUser._id);
+    // ✅ FIX 1: always load page 1
+    getMessagesByUserId(selectedUser._id, 1);
+
     subscribeToMessages();
     markMessagesAsSeen(selectedUser._id);
 
-    return () => {
-      unsubscribeFromMessages();
-    };
+    return () => unsubscribeFromMessages();
   }, [selectedUser?._id, socket]);
 
   // ================= AUTO SCROLL =================
   useEffect(() => {
     if (messageEndRef.current) {
       messageEndRef.current.scrollIntoView({
-        behavior: messages.length > 20 ? "auto" : "smooth",
+        behavior: "smooth",
       });
     }
-  }, [messages]);
+  }, [messages.length]);
+
+  // ================= PAGINATION SCROLL =================
+  const isFetchingRef = useRef(false);
+
+  const handleScroll = async () => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // ✅ FIX 2: prevent spam calls
+    if (container.scrollTop < 50 && !isFetchingRef.current && hasMore) {
+      isFetchingRef.current = true;
+
+      const prevHeight = container.scrollHeight;
+
+      await loadMoreMessages();
+
+      // ✅ FIX 3: maintain scroll position
+      requestAnimationFrame(() => {
+        const newHeight = container.scrollHeight;
+        container.scrollTop = newHeight - prevHeight;
+        isFetchingRef.current = false;
+      });
+    }
+  };
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.addEventListener("scroll", handleScroll);
+
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [hasMore]);
 
   return (
     <>
       <ChatHeader />
 
-      <div className="flex-1 px-6 overflow-y-auto py-8">
+      <div
+        ref={containerRef}
+        className="flex-1 px-6 overflow-y-auto py-8"
+      >
+        {/* 🔥 Loader for older messages */}
+        {isMessagesLoading && (
+          <p className="text-center text-slate-400 text-sm mb-2">
+            Loading older messages...
+          </p>
+        )}
+
         {/* ================= MESSAGES ================= */}
         {messages.length > 0 && !isMessagesLoading ? (
           <div className="max-w-3xl mx-auto space-y-6">
@@ -69,7 +116,6 @@ function ChatContainer() {
                         : "bg-slate-800 text-slate-200"
                     }`}
                   >
-                    {/* IMAGE */}
                     {msg.image && (
                       <img
                         src={msg.image}
@@ -79,10 +125,8 @@ function ChatContainer() {
                       />
                     )}
 
-                    {/* TEXT */}
                     {msg.text && <p className="mt-2">{msg.text}</p>}
 
-                    {/* TIME + STATUS */}
                     <div className="flex items-center gap-1 mt-1 text-xs opacity-75">
                       <span>
                         {new Date(msg.createdAt).toLocaleTimeString([], {
@@ -91,7 +135,6 @@ function ChatContainer() {
                         })}
                       </span>
 
-                      {/* ✅ FIXED: was msg.seen, schema field is isSeen */}
                       {isOwn && (
                         <span>
                           {msg.isSeen ? "✔✔" : "✔"}

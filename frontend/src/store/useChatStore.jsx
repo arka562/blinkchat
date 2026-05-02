@@ -13,8 +13,9 @@ export const useChatStore = create((set, get) => ({
   isMessagesLoading: false,
   isTyping: false,
   unreadCounts: {},
+  hasMore: true,
+page: 1,
 
-  // safer localStorage parsing
   isSoundEnabled: (() => {
     try {
       return JSON.parse(localStorage.getItem("isSoundEnabled")) ?? true;
@@ -72,21 +73,48 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // ================= MESSAGES =================
-  getMessagesByUserId: async (userId) => {
-    if (!userId) return;
+  loadMoreMessages: async () => {
+  const { selectedUser, page, hasMore } = get();
 
+  if (!hasMore || !selectedUser) return;
+
+  const nextPage = page + 1;
+
+  await get().getMessagesByUserId(selectedUser._id, nextPage);
+
+  set({ page: nextPage });
+},
+
+  // ================= MESSAGES =================
+  getMessagesByUserId: async (userId, page = 1) => {
+  try {
     set({ isMessagesLoading: true });
 
-    try {
-      const res = await axiosInstance.get(`/messages/${userId}`);
-      set({ messages: res?.data?.messages || [] });
-    } catch (error) {
-      toast.error(error?.response?.data?.message || "Failed to fetch messages");
-    } finally {
-      set({ isMessagesLoading: false });
+    const res = await axiosInstance.get(
+      `/messages/${userId}?page=${page}&limit=20`
+    );
+
+    const newMessages = res.data.messages;
+
+    if (page === 1) {
+      // first load
+      set({
+        messages: newMessages,
+        hasMore: res.data.hasMore,
+      });
+    } else {
+      // prepend older messages
+      set({
+        messages: [...newMessages, ...get().messages],
+        hasMore: res.data.hasMore,
+      });
     }
-  },
+  } catch (error) {
+    toast.error("Failed to fetch messages");
+  } finally {
+    set({ isMessagesLoading: false });
+  }
+},
 
   // ================= UNREAD =================
   fetchUnreadCounts: async () => {
@@ -94,7 +122,6 @@ export const useChatStore = create((set, get) => ({
       const res = await axiosInstance.get("/messages/unread");
 
       const map = {};
-
       (res?.data?.unread || []).forEach((item) => {
         if (item?._id) {
           map[item._id.toString()] = item.count || 0;
@@ -112,10 +139,7 @@ export const useChatStore = create((set, get) => ({
     const { selectedUser, messages } = get();
     const { authUser } = useAuthStore.getState();
 
-    if (!selectedUser || !authUser?._id) {
-      toast.error("User not selected or auth missing");
-      return;
-    }
+    if (!selectedUser || !authUser?._id) return;
 
     const tempId = `temp-${Date.now()}`;
 
@@ -139,8 +163,6 @@ export const useChatStore = create((set, get) => ({
 
       const newMessage = res?.data?.message;
 
-      if (!newMessage) throw new Error("Invalid response");
-
       set((state) => ({
         messages: [
           ...state.messages.filter((m) => m._id !== tempId),
@@ -159,7 +181,6 @@ export const useChatStore = create((set, get) => ({
   // ================= SEEN =================
   markMessagesAsSeen: async (userId) => {
     if (!userId) return;
-
     try {
       await axiosInstance.put(`/messages/seen/${userId}`);
     } catch (error) {
@@ -168,43 +189,46 @@ export const useChatStore = create((set, get) => ({
   },
 
   // ================= SOCKET =================
-  // typing, stopTyping, messagesSeen are registered once at connect
-  // time in useAuthStore — not here — to avoid useEffect race condition
   subscribeToMessages: () => {
     const socket = useAuthStore.getState().socket;
-
     if (!socket) return;
 
     socket.off("newMessage");
 
     socket.on("newMessage", (msg) => {
-      if (!msg) return;
-
       const currentSelected = get().selectedUser;
-      const senderId = msg?.senderId?.toString();
 
-      if (!senderId) return;
+      const senderId =
+        typeof msg.senderId === "object"
+          ? msg.senderId._id.toString()
+          : msg.senderId.toString();
 
-      if (currentSelected && senderId === currentSelected?._id?.toString()) {
-        // message is from currently open chat — append
-        set((state) => ({
-          messages: [...state.messages, msg],
-        }));
+      const senderName =
+        typeof msg.senderId === "object"
+          ? msg.senderId.fullName
+          : "User";
 
-        // play sound if enabled
-        if (get().isSoundEnabled) {
-          const sound = new Audio("/sounds/notification.mp3");
-          sound.currentTime = 0;
-          sound.play().catch(() => {});
+      const currentSelectedId = currentSelected?._id?.toString();
+
+      if (currentSelectedId === senderId) {
+        // append message
+        const existing = get().messages;
+        const alreadyExists = existing.some((m) => m._id === msg._id);
+        if (!alreadyExists) {
+          set({ messages: [...existing, msg] });
         }
       } else {
-        // message from a different chat — increment unread
-        set((state) => ({
-          unreadCounts: {
-            ...state.unreadCounts,
-            [senderId]: (state.unreadCounts[senderId] || 0) + 1,
-          },
-        }));
+        // unread
+        const counts = { ...get().unreadCounts };
+        counts[senderId] = (counts[senderId] || 0) + 1;
+        set({ unreadCounts: counts });
+
+        // notification
+        if (Notification.permission === "granted" && document.hidden) {
+          new Notification(`New message from ${senderName}`, {
+            body: msg.text || "📷 Image received",
+          });
+        }
       }
     });
   },
@@ -212,9 +236,6 @@ export const useChatStore = create((set, get) => ({
   unsubscribeFromMessages: () => {
     const socket = useAuthStore.getState().socket;
     if (!socket) return;
-
-    // only remove newMessage — typing/stopTyping/messagesSeen
-    // are persistent for socket lifetime, managed in useAuthStore
     socket.off("newMessage");
   },
 }));

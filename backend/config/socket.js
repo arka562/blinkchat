@@ -2,9 +2,9 @@ import { Server } from "socket.io";
 import { socketAuthMiddleware } from "../middleware/socket.auth.middleware.js";
 
 let io;
-const userSocketMap = {}; // { userId: socketId }
+const userSocketMap = {}; // { userId: [socketId1, socketId2] }
 
-// 🔌 Initialize Socket.IO with existing HTTP server
+// 🔌 Initialize Socket.IO
 export const initSocket = (server) => {
   io = new Server(server, {
     cors: {
@@ -16,7 +16,6 @@ export const initSocket = (server) => {
     },
   });
 
-  // 🔐 Apply authentication middleware
   io.use(socketAuthMiddleware);
 
   io.on("connection", (socket) => {
@@ -24,8 +23,12 @@ export const initSocket = (server) => {
 
     console.log("🟢 USER CONNECTED:", userId);
 
-    // ✅ store as string key
-    userSocketMap[userId] = socket.id;
+    // ================= STORE SOCKET =================
+    if (!userSocketMap[userId]) {
+      userSocketMap[userId] = new Set();
+    }
+
+    userSocketMap[userId].add(socket.id);
 
     console.log("📌 MAP AFTER CONNECT:", userSocketMap);
 
@@ -35,18 +38,11 @@ export const initSocket = (server) => {
     // ================= TYPING =================
     socket.on("typing", ({ to }) => {
       const targetId = to.toString();
-      const receiverSocketId = getReceiverSocketId(targetId);
+      const receiverSockets = getReceiverSocketIds(targetId);
 
-      console.log("🔥 SERVER RECEIVED TYPING:", userId, "→", targetId);
-      console.log("📌 MAP STATE:", userSocketMap);
-      console.log("🔍 LOOKING FOR:", targetId);
-      console.log("🎯 FOUND SOCKET:", receiverSocketId);
-
-      if (receiverSocketId) {
-        console.log("🚀 SENDING TYPING EVENT");
-
-        io.to(receiverSocketId).emit("typing", {
-          from: userId,
+      if (receiverSockets) {
+        receiverSockets.forEach((id) => {
+          io.to(id).emit("typing", { from: userId });
         });
       }
     });
@@ -54,11 +50,11 @@ export const initSocket = (server) => {
     // ================= STOP TYPING =================
     socket.on("stopTyping", ({ to }) => {
       const targetId = to.toString();
-      const receiverSocketId = getReceiverSocketId(targetId);
+      const receiverSockets = getReceiverSocketIds(targetId);
 
-      if (receiverSocketId) {
-        io.to(receiverSocketId).emit("stopTyping", {
-          from: userId,
+      if (receiverSockets) {
+        receiverSockets.forEach((id) => {
+          io.to(id).emit("stopTyping", { from: userId });
         });
       }
     });
@@ -67,7 +63,14 @@ export const initSocket = (server) => {
     socket.on("disconnect", () => {
       console.log("🔴 USER DISCONNECTED:", userId);
 
-      delete userSocketMap[userId];
+      if (userSocketMap[userId]) {
+        userSocketMap[userId].delete(socket.id);
+
+        // remove user only if no active sockets
+        if (userSocketMap[userId].size === 0) {
+          delete userSocketMap[userId];
+        }
+      }
 
       console.log("📌 MAP AFTER DISCONNECT:", userSocketMap);
 
@@ -78,12 +81,12 @@ export const initSocket = (server) => {
   return io;
 };
 
-// 📡 Get receiver socket ID (safe)
-export const getReceiverSocketId = (userId) => {
+// 📡 Get ALL receiver sockets
+export const getReceiverSocketIds = (userId) => {
   return userSocketMap[userId?.toString()];
 };
 
-// 📤 Export io instance getter
+// 📤 Get io instance
 export const getIO = () => {
   if (!io) {
     throw new Error("Socket.io not initialized!");
