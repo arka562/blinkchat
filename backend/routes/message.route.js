@@ -5,7 +5,9 @@ import {
   sendMessage,
   getChatPartners,
   markMessagesAsSeen,
-  getUnreadCounts
+  getUnreadCounts,
+  toggleReaction,
+
 } from "../controller/message.controller.js";
 import { protectRoute } from "../middleware/auth.middleware.js";
 import { arcjetProtection } from "../middleware/arcjet.middleware.js";
@@ -25,5 +27,6 @@ router.post("/send/:id", sendMessage);
 router.put("/seen/:id", markMessagesAsSeen);
 
 router.get("/unread", getUnreadCounts);
+router.put("/react/:messageId", toggleReaction);
 
 export default router;

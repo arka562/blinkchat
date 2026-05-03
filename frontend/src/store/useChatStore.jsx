@@ -187,6 +187,25 @@ page: 1,
       console.log("Seen update failed:", error);
     }
   },
+  reactToMessage: async (messageId, emoji) => {
+  try {
+    const res = await axiosInstance.put(`/messages/react/${messageId}`, {
+      emoji,
+    });
+
+    const updatedReactions = res.data.reactions;
+
+    set({
+      messages: get().messages.map((msg) =>
+        msg._id === messageId
+          ? { ...msg, reactions: updatedReactions }
+          : msg
+      ),
+    });
+  } catch (error) {
+    console.log("Reaction error:", error);
+  }
+},
 
   // ================= SOCKET =================
   subscribeToMessages: () => {
@@ -231,6 +250,15 @@ page: 1,
         }
       }
     });
+    socket.on("reactionUpdated", ({ messageId, reactions }) => {
+  set({
+    messages: get().messages.map((msg) =>
+      msg._id === messageId
+        ? { ...msg, reactions }
+        : msg
+    ),
+  });
+});
   },
 
   unsubscribeFromMessages: () => {

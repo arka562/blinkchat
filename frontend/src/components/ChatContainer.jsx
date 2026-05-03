@@ -8,17 +8,18 @@ import MessagesLoadingSkeleton from "./MessagesLoadingSkeleton";
 
 function ChatContainer() {
   const {
-    selectedUser,
-    getMessagesByUserId,
-    messages,
-    isMessagesLoading,
-    subscribeToMessages,
-    unsubscribeFromMessages,
-    markMessagesAsSeen,
-    isTyping,
-    loadMoreMessages,
-    hasMore
-  } = useChatStore();
+  selectedUser,
+  getMessagesByUserId,
+  messages,
+  isMessagesLoading,
+  subscribeToMessages,
+  unsubscribeFromMessages,
+  markMessagesAsSeen,
+  isTyping,
+  loadMoreMessages,
+  hasMore,
+  reactToMessage   // ✅ ADD THIS
+} = useChatStore();
 
   const { authUser, socket } = useAuthStore();
 
@@ -127,20 +128,41 @@ function ChatContainer() {
 
                     {msg.text && <p className="mt-2">{msg.text}</p>}
 
-                    <div className="flex items-center gap-1 mt-1 text-xs opacity-75">
-                      <span>
-                        {new Date(msg.createdAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
+                    {/* TIME + STATUS */}
+<div className="flex items-center gap-1 mt-1 text-xs opacity-75">
+  <span>
+    {new Date(msg.createdAt).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}
+  </span>
 
-                      {isOwn && (
-                        <span>
-                          {msg.isSeen ? "✔✔" : "✔"}
-                        </span>
-                      )}
-                    </div>
+  {isOwn && <span>{msg.isSeen ? "✔✔" : "✔"}</span>}
+</div>
+
+{/* 🔥 REACTIONS DISPLAY */}
+{msg.reactions?.length > 0 && (
+  <div className="flex gap-1 mt-1">
+    {msg.reactions.map((r, i) => (
+      <span key={i} className="text-xs bg-slate-700 px-2 rounded">
+        {r.emoji}
+      </span>
+    ))}
+  </div>
+)}
+
+{/* 🔥 REACTION BUTTONS */}
+<div className="flex gap-2 mt-2">
+  {["🔥", "❤️", "👍"].map((emoji) => (
+    <button
+      key={emoji}
+      onClick={() => reactToMessage(msg._id, emoji)}
+      className="text-sm hover:scale-125 transition"
+    >
+      {emoji}
+    </button>
+  ))}
+</div>
                   </div>
                 </div>
               );

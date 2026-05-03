@@ -310,3 +310,74 @@ export const getUnreadCounts = async (req, res) => {
     });
   }
 };
+
+export const toggleReaction = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user._id;
+
+    if (!["🔥", "❤️", "👍"].includes(emoji)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid emoji",
+      });
+    }
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({
+        success: false,
+        message: "Message not found",
+      });
+    }
+
+    // check if already reacted
+    const existing = message.reactions.find(
+      (r) => r.userId.toString() === userId.toString()
+    );
+
+    if (existing) {
+      // same emoji → remove
+      if (existing.emoji === emoji) {
+        message.reactions = message.reactions.filter(
+          (r) => r.userId.toString() !== userId.toString()
+        );
+      } else {
+        // update emoji
+        existing.emoji = emoji;
+      }
+    } else {
+      message.reactions.push({ userId, emoji });
+    }
+
+    await message.save();
+
+    // 🔥 SOCKET EMIT
+    const io = getIO();
+    const receiverSockets = getReceiverSocketIds(
+      message.receiverId.toString()
+    );
+
+    if (receiverSockets) {
+      receiverSockets.forEach((socketId) => {
+        io.to(socketId).emit("reactionUpdated", {
+          messageId,
+          reactions: message.reactions,
+        });
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      reactions: message.reactions,
+    });
+  } catch (error) {
+    console.error("Reaction error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};

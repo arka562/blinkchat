@@ -33,6 +33,18 @@ const messageSchema = new mongoose.Schema(
       type: String,
       index: true,
     },
+    reactions: [
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    emoji: {
+      type: String,
+      enum: ["🔥", "❤️", "👍"],
+    },
+  },
+],
 
     // ✅ Single source of truth
     isSeen: {
