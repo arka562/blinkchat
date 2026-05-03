@@ -8,12 +8,9 @@ const userSocketMap = {}; // { userId: [socketId1, socketId2] }
 export const initSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin:
-        process.env.NODE_ENV === "development"
-          ? ["http://localhost:5173", "http://localhost:5174"]
-          : [process.env.CLIENT_URL],
-      credentials: true,
-    },
+  origin: process.env.CLIENT_URL,
+  credentials: true,
+}
   });
 
   io.use(socketAuthMiddleware);
