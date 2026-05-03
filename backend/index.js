@@ -28,12 +28,12 @@ const server = createServer(app);
 console.log("ENV CHECK:", process.env.MONGO_URI);
 
 // ✅ EXPRESS CORS (VERY IMPORTANT)
-app.use({
-  cors: {
-  origin: process.env.CLIENT_URL,
-  credentials: true,
-}
-});
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL,
+    credentials: true,
+  })
+);
 
 // ✅ Body parsers
 app.use(express.json({ limit: "10mb" }));

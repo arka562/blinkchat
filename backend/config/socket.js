@@ -2,22 +2,25 @@ import { Server } from "socket.io";
 import { socketAuthMiddleware } from "../middleware/socket.auth.middleware.js";
 
 let io;
-const userSocketMap = {}; // { userId: [socketId1, socketId2] }
+const userSocketMap = {}; // { userId: Set(socketIds) }
 
-// 🔌 Initialize Socket.IO
 export const initSocket = (server) => {
   io = new Server(server, {
     cors: {
-  origin: process.env.CLIENT_URL,
-  credentials: true,
-}
+      origin: process.env.CLIENT_URL,
+      credentials: true,
+    },
   });
 
   io.use(socketAuthMiddleware);
 
   io.on("connection", (socket) => {
-    const userId = socket.userId.toString();
+    if (!socket.userId) {
+      console.log("❌ Unauthorized socket connection");
+      return socket.disconnect();
+    }
 
+    const userId = socket.userId.toString();
     console.log("🟢 USER CONNECTED:", userId);
 
     // ================= STORE SOCKET =================
@@ -37,10 +40,10 @@ export const initSocket = (server) => {
       const targetId = to.toString();
       const receiverSockets = getReceiverSocketIds(targetId);
 
-      if (receiverSockets) {
-        receiverSockets.forEach((id) => {
+      if (receiverSockets?.size) {
+        for (const id of receiverSockets) {
           io.to(id).emit("typing", { from: userId });
-        });
+        }
       }
     });
 
@@ -49,10 +52,10 @@ export const initSocket = (server) => {
       const targetId = to.toString();
       const receiverSockets = getReceiverSocketIds(targetId);
 
-      if (receiverSockets) {
-        receiverSockets.forEach((id) => {
-          io.to(id).emit("stopTyping", { from: userId });
-        });
+      if (receiverSockets?.size) {
+        for (const id of receiverSockets) {
+          io.to(id).emit("stopTyping", { from: userId }); // ✅ FIXED EVENT NAME
+        }
       }
     });
 
@@ -63,7 +66,6 @@ export const initSocket = (server) => {
       if (userSocketMap[userId]) {
         userSocketMap[userId].delete(socket.id);
 
-        // remove user only if no active sockets
         if (userSocketMap[userId].size === 0) {
           delete userSocketMap[userId];
         }
