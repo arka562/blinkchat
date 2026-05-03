@@ -1,16 +1,14 @@
 import { createClient } from "redis";
 
-const redisClient = createClient({
-  url: "redis-cli --tls -u redis://default:gQAAAAAAAb1FAAIgcDE3YThjYjljMWYwMmU0NzBjOThiMTk2MWJkMDVmMTRjYg@tidy-lioness-113989.upstash.io:6379",
+export const redisClient = createClient({
+  url: process.env.REDIS_URL,
+  socket: {
+    tls: true,
+  },
 });
 
-redisClient.on("error", (err) =>
-  console.error("❌ Redis Error:", err)
-);
+redisClient.on("error", (err) => {
+  console.error("❌ Redis Error:", err);
+});
 
 await redisClient.connect();
-
-console.log("✅ Redis Connected");
-
-
-export default redisClient;
