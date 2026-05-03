@@ -1,7 +1,7 @@
 import { createClient } from "redis";
 
 const redisClient = createClient({
-  url: "redis://127.0.0.1:6379",
+  url: "redis-cli --tls -u redis://default:gQAAAAAAAb1FAAIgcDE3YThjYjljMWYwMmU0NzBjOThiMTk2MWJkMDVmMTRjYg@tidy-lioness-113989.upstash.io:6379",
 });
 
 redisClient.on("error", (err) =>
