@@ -2,12 +2,22 @@ import { Server } from "socket.io";
 import { socketAuthMiddleware } from "../middleware/socket.auth.middleware.js";
 
 let io;
-const userSocketMap = {}; // { userId: Set(socketIds) }
+const userSocketMap = {};
 
 export const initSocket = (server) => {
+  const allowedOrigins = process.env.CLIENT_URL
+    ? [process.env.CLIENT_URL]
+    : ["http://localhost:5173"];
+
   io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL,
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error("Not allowed by CORS"));
+        }
+      },
       credentials: true,
     },
   });
@@ -23,7 +33,6 @@ export const initSocket = (server) => {
     const userId = socket.userId.toString();
     console.log("🟢 USER CONNECTED:", userId);
 
-    // ================= STORE SOCKET =================
     if (!userSocketMap[userId]) {
       userSocketMap[userId] = new Set();
     }
@@ -32,10 +41,8 @@ export const initSocket = (server) => {
 
     console.log("📌 MAP AFTER CONNECT:", userSocketMap);
 
-    // broadcast online users
     io.emit("getOnlineUsers", Object.keys(userSocketMap));
 
-    // ================= TYPING =================
     socket.on("typing", ({ to }) => {
       const targetId = to.toString();
       const receiverSockets = getReceiverSocketIds(targetId);
@@ -47,19 +54,17 @@ export const initSocket = (server) => {
       }
     });
 
-    // ================= STOP TYPING =================
     socket.on("stopTyping", ({ to }) => {
       const targetId = to.toString();
       const receiverSockets = getReceiverSocketIds(targetId);
 
       if (receiverSockets?.size) {
         for (const id of receiverSockets) {
-          io.to(id).emit("stopTyping", { from: userId }); // ✅ FIXED EVENT NAME
+          io.to(id).emit("stopTyping", { from: userId });
         }
       }
     });
 
-    // ================= DISCONNECT =================
     socket.on("disconnect", () => {
       console.log("🔴 USER DISCONNECTED:", userId);
 
@@ -80,12 +85,10 @@ export const initSocket = (server) => {
   return io;
 };
 
-// 📡 Get ALL receiver sockets
 export const getReceiverSocketIds = (userId) => {
   return userSocketMap[userId?.toString()];
 };
 
-// 📤 Get io instance
 export const getIO = () => {
   if (!io) {
     throw new Error("Socket.io not initialized!");

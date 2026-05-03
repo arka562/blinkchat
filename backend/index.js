@@ -30,7 +30,7 @@ console.log("ENV CHECK:", process.env.MONGO_URI);
 // ✅ EXPRESS CORS (VERY IMPORTANT)
 app.use(
   cors({
-    origin: process.env.CLIENT_URL,
+    origin: true,
     credentials: true,
   })
 );
