@@ -33,7 +33,7 @@ BlinkChat is a **full-stack real-time chat application** built from scratch usin
 
 | Login | Chat |
 |---|---|
-| ![Login Screen](docs/login.png) | ![Chat Screen](docs/chat.png) |
+| ![Login Screen](screenshots/login.png) | ![Chat Screen](screenshots/chat.png) |
 
 ---
 
