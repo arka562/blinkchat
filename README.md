@@ -15,6 +15,8 @@
 [![GitHub](https://img.shields.io/badge/GitHub-arka562-black?style=for-the-badge&logo=github)](https://github.com/arka562)
 [![Made with](https://img.shields.io/badge/Made%20with-MERN%20Stack-00D4AA?style=for-the-badge)](https://github.com/arka562/blinkchat)
 
+> ⚠️ **Note:** Hosted on Render's free tier — the server may take ~30 seconds to wake up on first visit.
+
 </div>
 
 ---
@@ -139,11 +141,11 @@ cd blinkchat
 
 ### 2. Backend
 ```bash
-cd server
+cd backend
 npm install
 ```
 
-Create `server/.env`:
+Create `backend/.env`:
 ```env
 PORT=3000
 MONGO_URI=your_mongodb_connection_string
@@ -161,7 +163,7 @@ npm run dev
 
 ### 3. Frontend
 ```bash
-cd client
+cd frontend
 npm install
 npm run dev
 ```
@@ -174,14 +176,14 @@ App runs at `http://localhost:5173`
 
 ```
 blinkchat/
-├── client/                  # React frontend (Vite)
+├── frontend/                # React frontend (Vite)
 │   ├── src/
 │   │   ├── components/      # UI components
 │   │   ├── store/           # Zustand stores
 │   │   ├── hooks/           # Custom React hooks
 │   │   └── pages/           # Route-level pages
 │
-├── server/                  # Express backend
+├── backend/                 # Express backend
 │   ├── controllers/         # Route handlers
 │   ├── models/              # Mongoose schemas
 │   ├── routes/              # API route definitions
