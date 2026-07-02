@@ -11,7 +11,7 @@
 
 ### Real-time chat. Zero lag. Full stack.
 
-[![Live Demo](https://img.shields.io/badge/🔴%20LIVE%20DEMO-Visit%20App-red?style=for-the-badge)](https://blinkchat1-8abd.onrender.com/)
+[![Live Demo](https://img.shields.io/badge/🔴%20LIVE%20DEMO-Visit%20App-red?style=for-the-badge)](https://blinkchat-blond.vercel.app/)
 [![GitHub](https://img.shields.io/badge/GitHub-arka562-black?style=for-the-badge&logo=github)](https://github.com/arka562)
 [![Made with](https://img.shields.io/badge/Made%20with-MERN%20Stack-00D4AA?style=for-the-badge)](https://github.com/arka562/blinkchat)
 
